@@ -242,9 +242,9 @@ npx vitest run
 ### Splash & Authentication
 
 <p align="center">
-  <img src="screenshots/splash.png" width="280"/>
-  <img src="screenshots/login.png" width="280"/>
-  <img src="screenshots/register.png" width="280"/>
+  <img src="screenshots/splash.png" width="400"/>
+  <img src="screenshots/login.png" width="400"/>
+  <img src="screenshots/register.png" width="400"/>
 </p>
 <p align="center">
   <sub>Splash Screen</sub> &nbsp;•&nbsp; <sub>Login</sub> &nbsp;•&nbsp; <sub>Register with Password Strength</sub>
@@ -255,8 +255,8 @@ npx vitest run
 ### Chat Experience
 
 <p align="center">
-  <img src="screenshots/chat.png" width="280"/>
-  <img src="screenshots/sidebar.png" width="280"/>
+  <img src="screenshots/chat.png" width="400"/>
+  <img src="screenshots/sidebar.png" width="400"/>
 </p>
 <p align="center">
   <sub>Real-Time Chat Room</sub> &nbsp;•&nbsp; <sub>Room Sidebar</sub>
@@ -267,7 +267,7 @@ npx vitest run
 ### User Profile
 
 <p align="center">
-  <img src="screenshots/profile.png" width="280"/>
+  <img src="screenshots/profile.png" width="400"/>
 </p>
 <p align="center">
   <sub>Profile Editor</sub>
