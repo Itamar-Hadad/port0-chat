@@ -243,7 +243,7 @@ export default function MessageItem({ message, isOwn }) {
               }`}
               dir="auto"
             >
-              {text && <span>{text}</span>}
+              {text && <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>}
               {fileURL && (
                 <FileAttachment fileURL={fileURL} fileName={fileName} fileType={fileType} isOwn={isOwn} />
               )}

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase'
@@ -10,7 +10,15 @@ export default function MessageInput({ roomId }) {
   const [file, setFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
+  const textareaRef = useRef(null)
   const { user } = useAuth()
+
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  }, [text])
 
   function handleFileChange(event) {
     const selected = event.target.files[0]
@@ -110,12 +118,20 @@ export default function MessageInput({ roomId }) {
         >
           <PaperclipIcon />
         </button>
-        <input
-          type="text"
+        <textarea
+          ref={textareaRef}
           value={text}
           onChange={event => setText(event.target.value)}
-          placeholder="Message..."
-          className="flex-1 bg-gray-100 text-gray-800 placeholder-gray-400 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F08C30]/50 border border-gray-200"
+          onKeyDown={event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              handleSubmit(event)
+            }
+          }}
+          placeholder="Message... (Shift+Enter for new line)"
+          rows={1}
+          className="flex-1 bg-gray-100 text-gray-800 placeholder-gray-400 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F08C30]/50 border border-gray-200 resize-none"
+          style={{ overflowY: 'auto' }}
         />
         <button
           type="submit"
