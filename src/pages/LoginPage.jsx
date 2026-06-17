@@ -89,6 +89,25 @@ function GoogleIcon() {
   )
 }
 
+function friendlyError(error) {
+  const code = error?.code ?? ''
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found')
+    return 'Incorrect email or password'
+  if (code === 'auth/email-already-in-use')
+    return 'An account with this email already exists'
+  if (code === 'auth/invalid-email')
+    return 'Please enter a valid email address'
+  if (code === 'auth/weak-password')
+    return 'Password is too weak'
+  if (code === 'auth/too-many-requests')
+    return 'Too many failed attempts — please try again later'
+  if (code === 'auth/network-request-failed')
+    return 'Network error — check your connection'
+  if (code === 'auth/popup-closed-by-user')
+    return 'Google sign-in was cancelled'
+  return 'Something went wrong — please try again'
+}
+
 export default function LoginPage() {
   const { login, register, googleSignIn } = useAuth()
   const navigate = useNavigate()
@@ -122,7 +141,7 @@ export default function LoginPage() {
       await login(email, password)
       navigate('/chat')
     } catch (error) {
-      setError(error.message)
+      setError(friendlyError(error))
     } finally {
       setLoading(false)
     }
@@ -160,7 +179,7 @@ export default function LoginPage() {
       await register(name, email, password)
       navigate('/chat')
     } catch (error) {
-      setError(error.message)
+      setError(friendlyError(error))
     } finally {
       setLoading(false)
     }
@@ -173,7 +192,7 @@ export default function LoginPage() {
       await googleSignIn()
       navigate('/chat')
     } catch (error) {
-      setError(error.message)
+      setError(friendlyError(error))
       setLoading(false)
     }
   }
