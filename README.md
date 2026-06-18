@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://port0-chat.vercel.app">
-    <img src="https://img.shields.io/badge/🚀_Live_Demo-port0--chat.vercel.app-F08C30?style=for-the-badge"/>
+    <img src="https://img.shields.io/badge/🚀_port0--chat.vercel.app-F08C30?style=for-the-badge"/>
   </a>
 </p>
 
