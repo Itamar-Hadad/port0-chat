@@ -197,7 +197,7 @@ port0-chat/
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/port0-chat.git
+git clone https://github.com/Itamar-Hadad/port0-chat.git
 cd port0-chat
 npm install
 ```
@@ -258,7 +258,7 @@ npx vitest run
   <img src="screenshots/chat.png" width="600"/>
 </p>
 <p align="center">
-  <sub>Real-Time Chat Room</sub> &nbsp;•&nbsp; <sub>Room Sidebar</sub>
+  <sub>Real-Time Chat Room</sub>
 </p>
 
 ---
