@@ -27,7 +27,7 @@ export default function ChatPage() {
       />
 
       <main className="flex-1 flex flex-col md:ml-0 overflow-hidden">
-        <ChatRoom />
+        <ChatRoom unreadCounts={unreadCounts} />
       </main>
     </div>
   )

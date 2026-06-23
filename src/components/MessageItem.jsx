@@ -73,6 +73,7 @@ function PauseIcon() {
 
 function VoicePlayer({ audioURL, duration, isOwn }) {
   const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
   const audioRef = useRef(null)
 
   function togglePlay() {
@@ -85,9 +86,20 @@ function VoicePlayer({ audioURL, duration, isOwn }) {
     }
   }
 
+  function seek(event) {
+    const value = Number(event.target.value)
+    audioRef.current.currentTime = value
+    setCurrentTime(value)
+  }
+
   return (
     <div className="flex items-center gap-2 mt-1">
-      <audio ref={audioRef} src={audioURL} onEnded={() => setIsPlaying(false)} />
+      <audio
+        ref={audioRef}
+        src={audioURL}
+        onEnded={() => setIsPlaying(false)}
+        onTimeUpdate={() => setCurrentTime(audioRef.current.currentTime)}
+      />
       <button
         type="button"
         onClick={togglePlay}
@@ -98,6 +110,15 @@ function VoicePlayer({ audioURL, duration, isOwn }) {
       >
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </button>
+      <input
+        type="range"
+        aria-label="Seek voice message"
+        min={0}
+        max={duration}
+        value={currentTime}
+        onChange={seek}
+        className="flex-1 accent-[#F08C30]"
+      />
       <span className={`text-xs font-mono ${isOwn ? 'text-white/70' : 'text-gray-500'}`}>{formatDuration(duration)}</span>
     </div>
   )

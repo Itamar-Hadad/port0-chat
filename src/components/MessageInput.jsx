@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '../firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, storage, functions } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { activeMentionQuery } from '../lib/mentions'
 import { formatDuration } from '../lib/formatDuration'
@@ -26,6 +27,18 @@ export default function MessageInput({ roomId, replyingTo, onCancelReply, allUse
   const { user } = useAuth()
   const { notifyTyping, clearTyping } = useTypingWriter(roomId)
   const { isRecording, durationSeconds, startRecording, stopRecording } = useVoiceRecorder(handleRecordingComplete)
+  const [suggestions, setSuggestions] = useState(null)
+
+  async function handleRequestSuggestions() {
+    setSuggestions({ loading: true })
+    try {
+      const suggestReplies = httpsCallable(functions, 'suggestReplies')
+      const result = await suggestReplies({ roomId })
+      setSuggestions({ list: result.data.suggestions })
+    } catch {
+      setSuggestions({ error: true })
+    }
+  }
 
   const mentionMatches = mentionQuery === null
     ? []
@@ -141,6 +154,44 @@ export default function MessageInput({ roomId, replyingTo, onCancelReply, allUse
     }
   }
 
+  // הצעה נשלחת כהודעת טקסט פשוטה, בלי קובץ מצורף — addDoc נפרד ולא דרך handleSubmit/sendMessage משותף
+  // בכוונה: שיתוף פונקציה אחת עם שני קוראים (handleSubmit + כאן) בלבל את ניתוח ה-call-graph של
+  // react-hooks/purity וסימן את ה-Date.now() (בקוד העלאת קובץ) כלא-טהור, אותה משפחת באג כמו ב-Mentions (#22).
+  async function handleSendSuggestion(suggestion) {
+    setError(null)
+    setUploading(true)
+    try {
+      await addDoc(collection(db, 'rooms', roomId, 'messages'), {
+        text: suggestion,
+        userId: user.uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        timestamp: serverTimestamp(),
+        ...(replyingTo && {
+          replyTo: {
+            messageId: replyingTo.id,
+            text: quotedTextFor(replyingTo),
+            displayName: replyingTo.displayName,
+          },
+        }),
+      })
+      setSuggestions(null)
+      onCancelReply?.()
+      clearTyping()
+    } catch (err) {
+      console.error('Error sending suggestion:', err)
+      setError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function handleEditSuggestion(suggestion) {
+    setText(suggestion)
+    setSuggestions(null)
+    textareaRef.current?.focus()
+  }
+
   function handleTextareaKeyDown(event) {
     if (mentionMatches.length > 0) {
       if (event.key === 'ArrowDown') {
@@ -211,6 +262,32 @@ export default function MessageInput({ roomId, replyingTo, onCancelReply, allUse
 
       {error && <p className="px-4 pt-2 text-xs text-red-500">{error}</p>}
 
+      {suggestions && !suggestions.loading && (
+        <div className="px-4 pb-1 flex flex-wrap items-center gap-2">
+          {suggestions.error && <p className="text-xs text-red-500">משהו השתבש בהצעות, נסו שוב.</p>}
+          {suggestions.list?.length === 0 && <p className="text-xs text-gray-400">אין הצעות כרגע.</p>}
+          {suggestions.list?.map((suggestion, index) => (
+            <div key={index} className="flex items-center gap-1 bg-[#F08C30]/10 text-[#F08C30] rounded-full pr-3 pl-1 py-1 text-xs" dir="auto">
+              <button
+                type="button"
+                onClick={() => handleSendSuggestion(suggestion)}
+                className="hover:underline"
+              >
+                {suggestion}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleEditSuggestion(suggestion)}
+                aria-label="ערוך הצעה"
+                className="text-[#F08C30] hover:bg-[#F08C30]/20 rounded-full p-1 transition-colors"
+              >
+                <PencilIcon />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {mentionMatches.length > 0 && (
         <div className="px-4 pb-1">
           <ul className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden max-h-40 overflow-y-auto">
@@ -259,6 +336,16 @@ export default function MessageInput({ roomId, replyingTo, onCancelReply, allUse
           className={`transition-colors shrink-0 ${isRecording ? 'text-red-500' : 'text-gray-400 hover:text-[#F08C30]'}`}
         >
           {isRecording ? <StopIcon /> : <MicIcon />}
+        </button>
+        <button
+          type="button"
+          onClick={handleRequestSuggestions}
+          disabled={suggestions?.loading}
+          aria-label="הצע תגובות"
+          aria-busy={!!suggestions?.loading}
+          className="text-gray-400 hover:text-[#F08C30] transition-colors shrink-0 disabled:opacity-60"
+        >
+          {suggestions?.loading ? <SpinnerIcon /> : '💡'}
         </button>
         {isRecording && (
           <span data-testid="recording-duration" className="text-xs text-red-500 font-mono shrink-0">
@@ -317,6 +404,23 @@ function StopIcon() {
     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
       <rect x="6" y="6" width="12" height="12" rx="2" />
     </svg>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  )
+}
+
+function SpinnerIcon() {
+  return (
+    <div
+      data-testid="suggestions-spinner"
+      className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"
+    />
   )
 }
 
