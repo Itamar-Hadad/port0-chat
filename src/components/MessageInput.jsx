@@ -3,15 +3,49 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
+import { activeMentionQuery } from '../lib/mentions'
+import { formatDuration } from '../lib/formatDuration'
+import { useTypingWriter } from '../hooks/useTypingWriter'
+import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
+import TypingIndicator from './TypingIndicator'
 
-export default function MessageInput({ roomId }) {
+function quotedTextFor(message) {
+  return message.deleted ? 'הודעה זו נמחקה' : message.text
+}
+
+export default function MessageInput({ roomId, replyingTo, onCancelReply, allUsers = [] }) {
   const [text, setText] = useState('')
   const [error, setError] = useState(null)
   const [file, setFile] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState(null)
+  const [mentionedUsers, setMentionedUsers] = useState([])
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
   const { user } = useAuth()
+  const { notifyTyping, clearTyping } = useTypingWriter(roomId)
+  const { isRecording, durationSeconds, startRecording, stopRecording } = useVoiceRecorder(handleRecordingComplete)
+
+  const mentionMatches = mentionQuery === null
+    ? []
+    : allUsers.filter((candidate) => candidate.displayName.toLowerCase().includes(mentionQuery.toLowerCase()))
+
+  function handleTextChange(event) {
+    const value = event.target.value
+    setText(value)
+    setMentionQuery(activeMentionQuery(value, event.target.selectionStart))
+    setHighlightedIndex(0)
+    notifyTyping()
+  }
+
+  function selectMention(candidate) {
+    const cursorPos = textareaRef.current.selectionStart
+    const atIndex = text.slice(0, cursorPos).lastIndexOf('@')
+    setText(text.slice(0, atIndex) + `@${candidate.displayName} ` + text.slice(cursorPos))
+    setMentionedUsers((prev) => [...prev, candidate])
+    setMentionQuery(null)
+  }
 
   useEffect(() => {
     const el = textareaRef.current
@@ -32,6 +66,30 @@ export default function MessageInput({ roomId }) {
     event.target.value = ''
   }
 
+  async function handleRecordingComplete(blob, duration) {
+    setError(null)
+    setUploading(true)
+    try {
+      const storageRef = ref(storage, `rooms/${roomId}/voice_${Date.now()}.webm`)
+      await uploadBytes(storageRef, blob)
+      const audioURL = await getDownloadURL(storageRef)
+      await addDoc(collection(db, 'rooms', roomId, 'messages'), {
+        type: 'voice',
+        audioURL,
+        duration,
+        userId: user.uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        timestamp: serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('Error sending voice message:', err)
+      setError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     if (!text.trim() && !file) return
@@ -50,6 +108,10 @@ export default function MessageInput({ roomId }) {
         fileType = file.type
       }
 
+      const mentionedCandidates = mentionedUsers.filter((candidate) => text.includes(`@${candidate.displayName}`))
+      const mentions = mentionedCandidates.map((candidate) => candidate.uid)
+      const mentionedNames = mentionedCandidates.map((candidate) => candidate.displayName)
+
       await addDoc(collection(db, 'rooms', roomId, 'messages'), {
         text: text.trim(),
         userId: user.uid,
@@ -57,9 +119,20 @@ export default function MessageInput({ roomId }) {
         photoURL: user.photoURL,
         timestamp: serverTimestamp(),
         ...(fileURL && { fileURL, fileName, fileType }),
+        ...(replyingTo && {
+          replyTo: {
+            messageId: replyingTo.id,
+            text: quotedTextFor(replyingTo),
+            displayName: replyingTo.displayName,
+          },
+        }),
+        ...(mentions.length > 0 && { mentions, mentionedNames }),
       })
       setText('')
       setFile(null)
+      setMentionedUsers([])
+      onCancelReply?.()
+      clearTyping()
     } catch (err) {
       console.error('Error sending message:', err)
       setError(err.message)
@@ -68,8 +141,49 @@ export default function MessageInput({ roomId }) {
     }
   }
 
+  function handleTextareaKeyDown(event) {
+    if (mentionMatches.length > 0) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setHighlightedIndex((i) => Math.min(i + 1, mentionMatches.length - 1))
+        return
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setHighlightedIndex((i) => Math.max(i - 1, 0))
+        return
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        selectMention(mentionMatches[highlightedIndex])
+        return
+      }
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      event.target.form?.requestSubmit()
+    }
+  }
+
   return (
     <div className="border-t border-gray-200 bg-white">
+      <TypingIndicator roomId={roomId} />
+      {replyingTo && (
+        <div className="px-4 pt-3 pb-1 flex items-center gap-2">
+          <div className="flex-1 min-w-0 border-r-2 border-[#F08C30] pr-2">
+            <p dir="auto" className="text-xs font-semibold text-[#F08C30]">מגיב/ה ל-{replyingTo.displayName}</p>
+            <p dir="auto" className="text-xs text-gray-500 truncate">{quotedTextFor(replyingTo)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Cancel reply"
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <XIcon />
+          </button>
+        </div>
+      )}
       {file && (
         <div className="px-4 pt-3 pb-1 flex items-center gap-2">
           {file.type.startsWith('image/') ? (
@@ -97,6 +211,26 @@ export default function MessageInput({ roomId }) {
 
       {error && <p className="px-4 pt-2 text-xs text-red-500">{error}</p>}
 
+      {mentionMatches.length > 0 && (
+        <div className="px-4 pb-1">
+          <ul className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden max-h-40 overflow-y-auto">
+            {mentionMatches.map((candidate, index) => (
+              <li key={candidate.uid}>
+                <button
+                  type="button"
+                  onClick={() => selectMention(candidate)}
+                  className={`w-full text-right px-3 py-1.5 text-sm transition-colors ${
+                    index === highlightedIndex ? 'bg-[#F08C30]/10 text-[#F08C30]' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {candidate.displayName}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <form
         aria-label="message form"
         onSubmit={handleSubmit}
@@ -118,16 +252,25 @@ export default function MessageInput({ roomId }) {
         >
           <PaperclipIcon />
         </button>
+        <button
+          type="button"
+          onClick={isRecording ? stopRecording : startRecording}
+          aria-label={isRecording ? 'Stop recording' : 'Record voice message'}
+          className={`transition-colors shrink-0 ${isRecording ? 'text-red-500' : 'text-gray-400 hover:text-[#F08C30]'}`}
+        >
+          {isRecording ? <StopIcon /> : <MicIcon />}
+        </button>
+        {isRecording && (
+          <span data-testid="recording-duration" className="text-xs text-red-500 font-mono shrink-0">
+            {formatDuration(durationSeconds)}
+          </span>
+        )}
         <textarea
           ref={textareaRef}
           value={text}
-          onChange={event => setText(event.target.value)}
-          onKeyDown={event => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault()
-              handleSubmit(event)
-            }
-          }}
+          onChange={handleTextChange}
+          onKeyDown={handleTextareaKeyDown}
+          onBlur={clearTyping}
           placeholder="Message... (Shift+Enter for new line)"
           rows={1}
           className="flex-1 bg-gray-100 text-gray-800 placeholder-gray-400 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#F08C30]/50 border border-gray-200 resize-none"
@@ -157,6 +300,22 @@ function DocumentIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  )
+}
+
+function MicIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+    </svg>
+  )
+}
+
+function StopIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+      <rect x="6" y="6" width="12" height="12" rx="2" />
     </svg>
   )
 }

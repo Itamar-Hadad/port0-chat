@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import Sidebar from '../components/Sidebar'
 import ChatRoom from '../components/ChatRoom'
+import { usePresence } from '../hooks/usePresence'
+import { useUnreadCounts } from '../hooks/useUnreadCounts'
 
 export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  usePresence()
+  const { unreadCounts } = useUnreadCounts()
 
   return (
     <div className="flex h-screen bg-[#0d0620] overflow-hidden">
@@ -16,7 +20,11 @@ export default function ChatPage() {
         ☰
       </button>
 
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        unreadCounts={unreadCounts}
+      />
 
       <main className="flex-1 flex flex-col md:ml-0 overflow-hidden">
         <ChatRoom />

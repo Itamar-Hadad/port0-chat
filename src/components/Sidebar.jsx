@@ -14,7 +14,7 @@ const ROOM_ICONS = {
   devops: '⚙️',
 }
 
-export default function Sidebar({ isOpen, onClose }) {
+export default function Sidebar({ isOpen, onClose, unreadCounts = {} }) {
   const { user } = useAuth()
   const { selectedRoom, setSelectedRoom } = useChatContext()
   const navigate = useNavigate()
@@ -78,7 +78,15 @@ export default function Sidebar({ isOpen, onClose }) {
                 {ROOM_ICONS[room]}
               </span>
               <span># {room}</span>
-              {selectedRoom === room && (
+              {unreadCounts[room] > 0 && (
+                <span
+                  data-testid="unread-badge"
+                  className="ml-auto bg-[#F08C30] text-white text-[10px] font-bold leading-none rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center"
+                >
+                  {unreadCounts[room]}
+                </span>
+              )}
+              {selectedRoom === room && !unreadCounts[room] && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/80" />
               )}
             </button>

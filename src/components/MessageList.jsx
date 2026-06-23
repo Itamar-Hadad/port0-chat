@@ -1,10 +1,28 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
+import { getDaySeparatorLabel, isSameDay } from '../lib/dateSeparator'
 import MessageItem from './MessageItem'
 
-export default function MessageList({ roomId }) {
+function lastTimestampBefore(messages, index) {
+  for (let i = index - 1; i >= 0; i--) {
+    if (messages[i].timestamp) return messages[i].timestamp
+  }
+  return null
+}
+
+function DateSeparator({ label }) {
+  return (
+    <div className="flex justify-center my-3">
+      <span className="text-xs font-medium text-gray-400 bg-gray-200/70 px-3 py-1 rounded-full">
+        {label}
+      </span>
+    </div>
+  )
+}
+
+export default function MessageList({ roomId, onReply, allUsers }) {
   const [messages, setMessages] = useState([])
   const { user } = useAuth()
   const containerRef = useRef(null)
@@ -55,13 +73,16 @@ export default function MessageList({ roomId }) {
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto bg-gray-50">
       <div className="flex flex-col justify-end min-h-full p-4">
-        {messages.map(msg => (
-          <MessageItem
-            key={msg.id}
-            message={msg}
-            isOwn={msg.userId === user?.uid}
-          />
-        ))}
+        {messages.map((msg, index) => {
+          const showSeparator = msg.timestamp && !isSameDay(msg.timestamp, lastTimestampBefore(messages, index))
+
+          return (
+            <Fragment key={msg.id}>
+              {showSeparator && <DateSeparator label={getDaySeparatorLabel(msg.timestamp)} />}
+              <MessageItem message={msg} isOwn={msg.userId === user?.uid} roomId={roomId} onReply={onReply} allUsers={allUsers} />
+            </Fragment>
+          )
+        })}
         <div ref={bottomRef} />
       </div>
     </div>
