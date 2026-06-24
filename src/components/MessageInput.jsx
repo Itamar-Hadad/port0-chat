@@ -42,7 +42,7 @@ export default function MessageInput({ roomId, replyingTo, onCancelReply, allUse
 
   const mentionMatches = mentionQuery === null
     ? []
-    : allUsers.filter((candidate) => candidate.displayName.toLowerCase().includes(mentionQuery.toLowerCase()))
+    : allUsers.filter((candidate) => candidate.displayName?.toLowerCase().includes(mentionQuery.toLowerCase()))
 
   function handleTextChange(event) {
     const value = event.target.value
